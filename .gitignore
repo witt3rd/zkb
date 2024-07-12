@@ -13,3 +13,4 @@ db/
 .env
 
 zkb_py.md
+!tests/data/
