@@ -1,6 +1,6 @@
 [project]
 name = "zkb"
-version = "0.1.0"
+version = "0.1.1"
 description = "A Zettelkasten-inspired knowledge base"
 authors = [{ name = "Donald Thompson", email = "witt3rd@witt3rd.com" }]
 dependencies = [
