@@ -3,9 +3,16 @@ from typing import Any
 
 
 class Database:
-    def __init__(self, db_path) -> None:
-        self.conn = sqlite3.connect(db_path)
+    def __init__(self, db_file: str) -> None:
+        self.db_file = db_file
+        self.conn = sqlite3.connect(db_file)
         self._create_tables()
+
+    def __str__(self) -> str:
+        return f"Database(db_file='{self.db_file}')"
+
+    def __repr__(self) -> str:
+        return f"Database(db_file='{self.db_file}')"
 
     def _create_tables(self) -> None:
         with self.conn:
@@ -81,3 +88,11 @@ class Database:
             return self.conn.execute(
                 "SELECT from_note FROM links WHERE to_note = ?", (filename,)
             ).fetchall()
+
+    def delete_note(self, filename: str) -> None:
+        with self.conn:
+            self.conn.execute("DELETE FROM notes WHERE filename = ?", (filename,))
+            self.conn.execute(
+                "DELETE FROM links WHERE from_note = ? OR to_note = ?",
+                (filename, filename),
+            )

@@ -12,5 +12,5 @@ data/
 db/
 .env
 
-zkb_py.md
+src_files.md
 !tests/data/
