@@ -7,6 +7,7 @@
 #   all-features: false
 #   with-sources: false
 #   generate-hashes: false
+#   universal: false
 
 -e file:.
 aiohttp==3.9.5
@@ -54,6 +55,7 @@ coloredlogs==15.0.1
 deprecated==1.2.14
     # via opentelemetry-api
     # via opentelemetry-exporter-otlp-proto-grpc
+    # via opentelemetry-semantic-conventions
 distro==1.9.0
     # via openai
 dnspython==2.6.1
@@ -108,7 +110,7 @@ idna==3.7
     # via httpx
     # via requests
     # via yarl
-importlib-metadata==7.1.0
+importlib-metadata==8.0.0
     # via litellm
     # via opentelemetry-api
 importlib-resources==6.4.0
@@ -125,7 +127,7 @@ jsonschema-specifications==2023.12.1
     # via jsonschema
 kubernetes==30.1.0
     # via chromadb
-litellm==1.42.0
+litellm==1.42.5
     # via qa-store
 loguru==0.7.2
     # via qa-store
@@ -160,10 +162,10 @@ oauthlib==3.2.2
     # via requests-oauthlib
 onnxruntime==1.18.1
     # via chromadb
-openai==1.37.0
+openai==1.37.1
     # via litellm
     # via qa-store
-opentelemetry-api==1.25.0
+opentelemetry-api==1.26.0
     # via chromadb
     # via opentelemetry-exporter-otlp-proto-grpc
     # via opentelemetry-instrumentation
@@ -171,28 +173,28 @@ opentelemetry-api==1.25.0
     # via opentelemetry-instrumentation-fastapi
     # via opentelemetry-sdk
     # via opentelemetry-semantic-conventions
-opentelemetry-exporter-otlp-proto-common==1.25.0
+opentelemetry-exporter-otlp-proto-common==1.26.0
     # via opentelemetry-exporter-otlp-proto-grpc
-opentelemetry-exporter-otlp-proto-grpc==1.25.0
+opentelemetry-exporter-otlp-proto-grpc==1.26.0
     # via chromadb
-opentelemetry-instrumentation==0.46b0
+opentelemetry-instrumentation==0.47b0
     # via opentelemetry-instrumentation-asgi
     # via opentelemetry-instrumentation-fastapi
-opentelemetry-instrumentation-asgi==0.46b0
+opentelemetry-instrumentation-asgi==0.47b0
     # via opentelemetry-instrumentation-fastapi
-opentelemetry-instrumentation-fastapi==0.46b0
+opentelemetry-instrumentation-fastapi==0.47b0
     # via chromadb
-opentelemetry-proto==1.25.0
+opentelemetry-proto==1.26.0
     # via opentelemetry-exporter-otlp-proto-common
     # via opentelemetry-exporter-otlp-proto-grpc
-opentelemetry-sdk==1.25.0
+opentelemetry-sdk==1.26.0
     # via chromadb
     # via opentelemetry-exporter-otlp-proto-grpc
-opentelemetry-semantic-conventions==0.46b0
+opentelemetry-semantic-conventions==0.47b0
     # via opentelemetry-instrumentation-asgi
     # via opentelemetry-instrumentation-fastapi
     # via opentelemetry-sdk
-opentelemetry-util-http==0.46b0
+opentelemetry-util-http==0.47b0
     # via opentelemetry-instrumentation-asgi
     # via opentelemetry-instrumentation-fastapi
 orjson==3.10.6
@@ -316,7 +318,7 @@ tqdm==4.66.4
     # via openai
     # via sentence-transformers
     # via transformers
-transformers==4.43.2
+transformers==4.43.3
     # via sentence-transformers
 typer==0.12.3
     # via chromadb

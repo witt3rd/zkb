@@ -12,5 +12,5 @@ data/
 db/
 .env
 
-src_files.md
+**/*_files.md
 !tests/data/

@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from dotenv import load_dotenv
 from qa_store import QuestionAnswerKB
@@ -218,16 +218,19 @@ class ZKB:
         if not full_path.exists():
             raise FileNotFoundError(f"Note {filename} does not exist")
 
+        original_note = Note(full_path)
+
         full_content = self._prepare_note_content(content, metadata)
         with open(full_path, "w", encoding="utf-8") as f:
             f.write(full_content)
+        updated_note = Note(full_path)
+        updated_note.metadata = {**original_note.metadata, **updated_note.metadata}
 
-        note = Note(full_path)
-        self._update_note_in_db(note)
+        self._update_note_in_db(updated_note)
         self.qa_kb.collection.delete(where={"note_filename": filename})
-        self.generate_and_index_qa_pairs(note)
+        self.generate_and_index_qa_pairs(updated_note)
 
-        return note
+        return updated_note
 
     def delete_note(self, filename: str) -> None:
         """
@@ -308,10 +311,11 @@ class ZKB:
         self, content: str, metadata: Optional[Dict] = None
     ) -> str:
         """Prepare note content with YAML frontmatter."""
+        if not metadata:
+            return content
         yaml_metadata = "---\n"
-        if metadata:
-            for key, value in metadata.items():
-                yaml_metadata += f"{key}: {value}\n"
+        for key, value in metadata.items():
+            yaml_metadata += f"{key}: {value}\n"
         yaml_metadata += "---\n\n"
         return yaml_metadata + content
 
@@ -327,3 +331,160 @@ class ZKB:
             note.metadata.get("title", note.filename),
             links,
         )
+
+    def add_entity(
+        self,
+        entity_type: str,
+        entity_name: str,
+        attributes: Optional[Dict[str, Any]] = None,
+    ) -> int:
+        """
+        Add a new entity to the ontology.
+
+        Parameters
+        ----------
+        entity_type : str
+            The type of the entity
+        entity_name : str
+            The name of the entity
+        attributes : Optional[Dict[str, Any]], optional
+            Additional attributes for the entity, by default None
+
+        Returns
+        -------
+        int
+            The ID of the newly added entity
+        """
+        entity_id = self.db.add_entity(entity_type, entity_name)
+        if attributes:
+            for key, value in attributes.items():
+                self.db.add_relationship(
+                    entity_id, self.db.add_entity("Attribute", str(value)), key
+                )
+        return entity_id
+
+    def add_relationship(
+        self, from_entity: str, to_entity: str, relationship_type: str
+    ) -> int:
+        """
+        Add a new relationship between entities in the ontology.
+
+        Parameters
+        ----------
+        from_entity : str
+            The name of the entity the relationship starts from
+        to_entity : str
+            The name of the entity the relationship points to
+        relationship_type : str
+            The type of the relationship
+
+        Returns
+        -------
+        int
+            The ID of the newly added relationship
+        """
+        from_id = self.db.get_entity_id(from_entity)
+        to_id = self.db.get_entity_id(to_entity)
+        return self.db.add_relationship(from_id, to_id, relationship_type)
+
+    def query_entities(
+        self, entity_type: Optional[str] = None, name: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Query entities in the ontology.
+
+        Parameters
+        ----------
+        entity_type : Optional[str], optional
+            The type of entities to query, by default None
+        name : Optional[str], optional
+            The name of the entity to query, by default None
+
+        Returns
+        -------
+        List[Dict[str, Any]]
+            A list of matching entities with their attributes
+        """
+        entities = self.db.get_entities(entity_type, name)
+        return [self._get_entity_with_attributes(entity) for entity in entities]
+
+    def query_relationships(
+        self,
+        from_type: Optional[str] = None,
+        from_name: Optional[str] = None,
+        relationship_type: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Query relationships in the ontology.
+
+        Parameters
+        ----------
+        from_type : Optional[str], optional
+            The type of the source entity, by default None
+        from_name : Optional[str], optional
+            The name of the source entity, by default None
+        relationship_type : Optional[str], optional
+            The type of relationship to query, by default None
+
+        Returns
+        -------
+        List[Dict[str, Any]]
+            A list of matching relationships
+        """
+        return self.db.get_relationships(from_type, from_name, relationship_type)
+
+    def _get_entity_with_attributes(
+        self, entity: Tuple[int, str, str]
+    ) -> Dict[str, Any]:
+        """
+        Helper method to get an entity with its attributes.
+
+        Parameters
+        ----------
+        entity : Tuple[int, str, str]
+            A tuple containing (id, type, name) of the entity
+
+        Returns
+        -------
+        Dict[str, Any]
+            A dictionary representing the entity with its attributes
+        """
+        entity_id, entity_type, entity_name = entity
+        attributes = self.db.get_entity_attributes(entity_id)
+        return {
+            "id": entity_id,
+            "type": entity_type,
+            "name": entity_name,
+            "attributes": {attr[0]: attr[1] for attr in attributes},
+        }
+
+    def unified_query(self, query: str, n_results: int = 5) -> List[Dict[str, Any]]:
+        """
+        Perform a unified query across both unstructured notes and structured ontology.
+
+        Parameters
+        ----------
+        query : str
+            The query string
+        n_results : int, optional
+            Number of results to return, by default 5
+
+        Returns
+        -------
+        List[Dict[str, Any]]
+            A list of results combining both unstructured and structured data
+        """
+        # Query unstructured notes
+        qa_results = self.query_qa(query, n_results=n_results)
+
+        # Query ontology (simplified example)
+        entity_results = self.query_entities(name=query)
+        relationship_results = self.query_relationships(from_name=query)
+
+        # Combine results (this is a simplified example and might need more sophisticated merging)
+        combined_results = qa_results + entity_results + relationship_results
+
+        # Sort and limit results (this is a very basic approach and might need refinement)
+        return sorted(
+            combined_results, key=lambda x: x.get("relevance", 0), reverse=True
+        )[:n_results]
