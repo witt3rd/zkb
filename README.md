@@ -40,7 +40,7 @@ ZKB is a command-line tool for managing a Zettelkasten-inspired knowledge base o
 ## Usage
 
 ```sh
-python -m zkb.cli [--data-dir DATA_DIR] [--db-path DB_PATH] {command} [args]
+python -m zkb.cli [--data-dir NOTES_DIR] [--db-path DB_PATH] {command} [args]
 ```
 
 Available commands:
@@ -54,7 +54,7 @@ Available commands:
 
 You can set the following environment variables or use a `.env` file:
 
-- `DATA_DIR`: Directory containing markdown notes (default: "data/")
+- `NOTES_DIR`: Directory containing markdown notes (default: "notes/")
 - `DB_DIR`: Directory for the SQLite database (default: "db/")
 
 ## Embeddings-Based Retrieval (EBR)

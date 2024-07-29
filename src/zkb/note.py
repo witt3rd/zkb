@@ -77,7 +77,11 @@ class Note:
         link_pattern = r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]"
         matches = re.findall(link_pattern, self.content)
         return [
-            {"target": match[0], "alias": match[1] if match[1] else match[0]}
+            {
+                "target": match[0],
+                "alias": match[1] if match[1] else match[0],
+                "full": match[1] if match[1] else match[0],
+            }
             for match in matches
         ]
 

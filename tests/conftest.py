@@ -17,9 +17,9 @@ def db(temp_dir):
 
 @pytest.fixture
 def zkb_instance(temp_dir):
-    data_dir = temp_dir / "data"
+    notes_dir = temp_dir / "data"
     db_dir = temp_dir / "db"
-    return ZKB(data_dir=str(data_dir), db_dir=str(db_dir))
+    return ZKB(notes_dir=str(notes_dir), db_dir=str(db_dir))
 
 
 @pytest.fixture

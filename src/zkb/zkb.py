@@ -1,22 +1,22 @@
 import os
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from dotenv import load_dotenv
 
-from .db import Database
+from .db import BrokenLink, Database, LinkInfo, NoteInfo
 from .note import Note
 
 load_dotenv()
 
-DATA_DIR = os.getenv("DATA_DIR", "data/")
+NOTES_DIR = os.getenv("NOTES_DIR", "notes/")
 DB_DIR = os.getenv("DB_DIR", "db/")
 
 
 class ZKB:
     def __init__(
         self,
-        data_dir: Optional[str] = None,
+        notes_dir: Optional[str] = None,
         db_dir: Optional[str] = None,
     ) -> None:
         """
@@ -24,13 +24,12 @@ class ZKB:
 
         Parameters
         ----------
-        data_dir : Optional[str], optional
-            Directory for storing notes, by default None (uses DATA_DIR from environment)
+        notes_dir : Optional[str], optional
+            Directory for storing notes, by default None (uses NOTES_DIR from environment)
         db_dir : Optional[str], optional
             Directory for storing the database, by default None (uses DB_DIR from environment)
         """
-        self.data_path = Path(data_dir or DATA_DIR)
-        self.notes_path = self.data_path / "notes"
+        self.notes_path = Path(notes_dir or NOTES_DIR)
         self.notes_path.mkdir(parents=True, exist_ok=True)
 
         self.db_dir_path = Path(db_dir or DB_DIR)
@@ -148,7 +147,7 @@ class ZKB:
         os.remove(full_path)
         self.db.delete_note(filename)
 
-    def search_notes(self, query: str) -> List[Dict[str, str]]:
+    def search_notes(self, query: str) -> List[NoteInfo]:
         """
         Search for notes based on a query string.
 
@@ -159,33 +158,28 @@ class ZKB:
 
         Returns
         -------
-        List[Dict[str, str]]
-            A list of dictionaries containing filename and title of matching notes
+        List[NoteInfo]
+            A list of NoteInfo objects containing filename and title of matching notes
         """
-        results = self.db.search_notes(query)
-        return [{"filename": filename, "title": title} for filename, title in results]
+        return self.db.search_notes(query)
 
-    def get_backlinks(self, filename: str) -> List[Dict[str, str]]:
+    def get_incoming_links(self, filename: str) -> List[LinkInfo]:
         """
         Get all notes that link to the given note.
 
         Parameters
         ----------
         filename : str
-            The filename of the note to find backlinks for
+            The filename of the note to find incoming for
 
         Returns
         -------
-        List[Dict[str, str]]
-            A list of dictionaries containing the filename, title, link_type, and is_broken status of notes linking to the given note
+        List[LinkInfo]
+            A list of LinkInfo objects containing information about notes linking to the given note
         """
-        links = self.db.get_links(filename, direction="incoming")
-        return [
-            {"filename": link[0], "title": link[2], "link_type": link[1]}
-            for link in links
-        ]
+        return self.db.get_links(filename, direction="incoming")
 
-    def get_outgoing_links(self, filename: str) -> List[Dict[str, str]]:
+    def get_outgoing_links(self, filename: str) -> List[LinkInfo]:
         """
         Get all notes that the given note links to.
 
@@ -196,21 +190,31 @@ class ZKB:
 
         Returns
         -------
-        List[Dict[str, str]]
-            A list of dictionaries containing the filename, title, link_type, and is_broken status of notes linked from the given note
+        List[LinkInfo]
+            A list of LinkInfo objects containing information about notes linked from the given note
         """
-        links = self.db.get_links(filename, direction="outgoing")
-        return [
-            {"filename": link[0], "title": link[2], "link_type": link[1]}
-            for link in links
-        ]
+        return self.db.get_links(filename, direction="outgoing")
 
-    def scan_notes(self) -> None:
+    def scan_notes(self) -> int:
         """Scan all notes and update the database."""
+        count = 0
         for note_file in self.notes_path.rglob("*.md"):
             note = Note(note_file)
             self._update_note_in_db(note)
+            count += 1
         self.db.update_broken_links()
+        return count
+
+    def get_all_notes(self) -> List[NoteInfo]:
+        """
+        Get all notes in the database.
+
+        Returns
+        -------
+        List[NoteInfo]
+            A list of NoteInfo objects containing the filename and title of each note
+        """
+        return self.db.get_all_notes()
 
     def get_orphaned_notes(self) -> List[str]:
         """
@@ -223,20 +227,16 @@ class ZKB:
         """
         return self.db.get_orphaned_notes()
 
-    def get_broken_links(self) -> List[Dict[str, str]]:
+    def get_broken_links(self) -> List[BrokenLink]:
         """
         Find broken links (links to non-existent notes).
 
         Returns
         -------
-        List[Dict[str, str]]
-            A list of dictionaries containing the from_note, to_note, and link_type of broken links
+        List[BrokenLink]
+            A list of BrokenLink objects containing information about broken links
         """
-        broken_links = self.db.get_broken_links()
-        return [
-            {"from_note": link[0], "to_note": link[1], "link_type": link[2]}
-            for link in broken_links
-        ]
+        return self.db.get_broken_links()
 
     def _update_note_in_db(self, note: Note) -> None:
         """Update note information in the database."""

@@ -6,7 +6,7 @@ from zkb import ZKB, Note
 
 def test_zkb_initialization(zkb_instance):
     assert isinstance(zkb_instance, ZKB)
-    assert Path(zkb_instance.data_path).exists()
+    assert Path(zkb_instance.notes_path).exists()
     assert Path(zkb_instance.notes_path).exists()
     assert Path(zkb_instance.db_dir_path).exists()
     assert Path(zkb_instance.db_file_path).exists()

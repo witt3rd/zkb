@@ -5,8 +5,8 @@ from .zkb import ZKB
 
 
 class CLI:
-    def __init__(self, data_dir: Optional[str] = None, db_dir: Optional[str] = None):
-        self.zkb = ZKB(data_dir=data_dir, db_dir=db_dir)
+    def __init__(self, notes_dir: Optional[str] = None, db_dir: Optional[str] = None):
+        self.zkb = ZKB(notes_dir=notes_dir, db_dir=db_dir)
 
     def create_note(self, title, content):
         try:
@@ -43,30 +43,44 @@ class CLI:
             print("Search results:")
             for result in results:
                 print(f"- {result['filename']}: {result['title']}")
+                if result.get("link_type"):
+                    print(f"  (Referenced as: {result['link_type']})")
         else:
-            print("No results found")
+            print("No r esults found")
 
-    def get_backlinks(self, filename):
-        backlinks = self.zkb.get_backlinks(filename)
-        if backlinks:
-            print(f"Backlinks for {filename}:")
-            for link in backlinks:
-                print(f"- {link['filename']}: {link['title']} ({link['link_type']})")
+    def get_incoming_links(self, filename):
+        links = self.zkb.get_incoming_links(filename)
+        if links:
+            print(f"Incoming links for {filename}:")
+            for link in links:
+                if link.alias == filename:
+                    print(f"<- {link.target} | {link.source}")
+                else:
+                    print(f"<<- {link.source} | {link.alias}")
         else:
-            print(f"No backlinks found for {filename}")
+            print(f"No incoming links found for {filename}")
 
     def get_outgoing_links(self, filename):
         links = self.zkb.get_outgoing_links(filename)
         if links:
             print(f"Outgoing links for {filename}:")
             for link in links:
-                print(f"- {link['filename']}: {link['title']} ({link['link_type']})")
+                print(f"-> {link.target} | {link.alias}")
         else:
             print(f"No outgoing links found for {filename}")
 
     def scan_notes(self):
-        self.zkb.scan_notes()
-        print("Notes scanned and database updated")
+        count = self.zkb.scan_notes()
+        print(f"{count} note{'s' if count > 1 else ''} scanned and database updated")
+
+    def get_all_notes(self):
+        notes = self.zkb.get_all_notes()
+        if notes:
+            print("All notes:")
+            for note in notes:
+                print(f"- {note['filename']}: {note['title']}")
+        else:
+            print("No notes found")
 
     def get_orphaned_notes(self):
         orphans = self.zkb.get_orphaned_notes()
@@ -82,16 +96,14 @@ class CLI:
         if broken_links:
             print("Broken links:")
             for link in broken_links:
-                print(
-                    f"- {link['from_note']} -> {link['to_note']} ({link['link_type']})"
-                )
+                print(f"- {link.from_note} -> {link.to_note} ({link.alias})")
         else:
             print("No broken links found")
 
 
 def main():
     parser = argparse.ArgumentParser(description="ZKB CLI")
-    parser.add_argument("--data-dir", type=str, help="Directory for storing notes")
+    parser.add_argument("--notes-dir", type=str, help="Directory for storing notes")
     parser.add_argument("--db-dir", type=str, help="Directory for storing the database")
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -118,11 +130,11 @@ def main():
     search_parser = subparsers.add_parser("search", help="Search for notes")
     search_parser.add_argument("query", help="Search query")
 
-    # Get backlinks
-    backlinks_parser = subparsers.add_parser(
-        "backlinks", help="Get backlinks for a note"
+    # Get incoming links
+    incoming_parser = subparsers.add_parser(
+        "incoming", help="Get incoming links for a note"
     )
-    backlinks_parser.add_argument("filename", help="Filename of the note")
+    incoming_parser.add_argument("filename", help="Filename of the note")
 
     # Get outgoing links
     outgoing_parser = subparsers.add_parser(
@@ -139,9 +151,12 @@ def main():
     # Get broken links
     subparsers.add_parser("broken", help="Get broken links")
 
+    # Get all notes
+    subparsers.add_parser("all", help="Get all notes")
+
     args = parser.parse_args()
 
-    cli = CLI(data_dir=args.data_dir, db_dir=args.db_dir)
+    cli = CLI(notes_dir=args.notes_dir, db_dir=args.db_dir)
 
     if args.command == "create":
         cli.create_note(args.title, args.content)
@@ -153,12 +168,14 @@ def main():
         cli.delete_note(args.filename)
     elif args.command == "search":
         cli.search_notes(args.query)
-    elif args.command == "backlinks":
-        cli.get_backlinks(args.filename)
+    elif args.command == "incoming":
+        cli.get_incoming_links(args.filename)
     elif args.command == "outgoing":
         cli.get_outgoing_links(args.filename)
     elif args.command == "scan":
         cli.scan_notes()
+    elif args.command == "all":
+        cli.get_all_notes()
     elif args.command == "orphans":
         cli.get_orphaned_notes()
     elif args.command == "broken":

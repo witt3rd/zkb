@@ -1,5 +1,34 @@
 import sqlite3
-from typing import List, Literal, Optional, Tuple
+from dataclasses import dataclass
+from typing import List, Literal, Optional
+
+
+@dataclass
+class NoteInfo:
+    filename: str
+    title: str
+
+
+@dataclass
+class NoteContent:
+    filename: str
+    title: str
+    content: str
+
+
+@dataclass
+class LinkInfo:
+    source: str
+    target: str
+    alias: str
+    is_broken: bool
+
+
+@dataclass
+class BrokenLink:
+    from_note: str
+    to_note: str
+    link_type: str
 
 
 class Database:
@@ -32,10 +61,10 @@ class Database:
                     id INTEGER PRIMARY KEY,
                     from_note TEXT,
                     to_note TEXT,
-                    link_type TEXT,
+                    alias TEXT,
                     is_broken BOOLEAN DEFAULT 0,
                     FOREIGN KEY(from_note) REFERENCES notes(filename),
-                    UNIQUE(from_note, to_note, link_type)
+                    UNIQUE(from_note, to_note, alias)
                 )
             """)
 
@@ -60,9 +89,8 @@ class Database:
                 (filename,),
             )
 
-    def add_or_update_link(self, from_note: str, to_note: str, link_type: str) -> None:
+    def add_or_update_link(self, from_note: str, to_note: str, alias: str) -> None:
         with self.conn:
-            # Check if the target note exists
             target_exists = (
                 self.conn.execute(
                     "SELECT 1 FROM notes WHERE filename = ?", (to_note,)
@@ -72,62 +100,60 @@ class Database:
 
             self.conn.execute(
                 """
-                INSERT INTO links (from_note, to_note, link_type, is_broken)
+                INSERT INTO links (from_note, to_note, alias, is_broken)
                 VALUES (?, ?, ?, ?)
-                ON CONFLICT(from_note, to_note, link_type) DO UPDATE SET
+                ON CONFLICT(from_note, to_note, alias) DO UPDATE SET
                     is_broken = excluded.is_broken
                 """,
-                (from_note, to_note, link_type, not target_exists),
+                (from_note, to_note, alias, not target_exists),
             )
 
-    def get_all_notes(self) -> List[Tuple[str, str]]:
+    def get_all_notes(self) -> List[NoteInfo]:
         with self.conn:
-            return self.conn.execute("SELECT filename, title FROM notes").fetchall()
+            results = self.conn.execute("SELECT filename, title FROM notes").fetchall()
+        return [NoteInfo(filename, title) for filename, title in results]
 
-    def get_note(self, filename: str) -> Optional[Tuple[str, str, str]]:
+    def get_note(self, filename: str) -> Optional[NoteContent]:
         with self.conn:
             result = self.conn.execute(
-                """
-                SELECT filename, title, content
-                FROM notes
-                WHERE filename = ?
-            """,
+                "SELECT filename, title, content FROM notes WHERE filename = ?",
                 (filename,),
             ).fetchone()
-        return result if result else None
+        return NoteContent(*result) if result else None
 
     def get_links(
-        self,
-        filename: str,
-        direction: Literal["outgoing", "incoming"] = "outgoing",
-    ) -> List[Tuple[str, str, str, bool]]:
+        self, filename: str, direction: Literal["outgoing", "incoming"] = "outgoing"
+    ) -> List[LinkInfo]:
         with self.conn:
             if direction == "outgoing":
                 query = """
-                    SELECT to_note, link_type, COALESCE(notes.title, links.to_note), links.is_broken
+                    SELECT from_note, to_note, alias, is_broken
                     FROM links
-                    LEFT JOIN notes ON links.to_note = notes.filename
                     WHERE from_note = ?
                 """
+                params = (filename,)
             else:  # incoming
                 query = """
-                    SELECT from_note, link_type, notes.title, links.is_broken
+                    SELECT from_note, to_note, links.alias, links.is_broken
                     FROM links
-                    JOIN notes ON links.from_note = notes.filename
-                    WHERE to_note = ?
+                    WHERE links.to_note = ? OR links.alias = ?
                 """
-            return self.conn.execute(query, (filename,)).fetchall()
+                params = (filename, filename)
+            results = self.conn.execute(query, params).fetchall()
+        return [LinkInfo(*result) for result in results]
 
-    def search_notes(self, query: str) -> List[Tuple[str, str]]:
+    def search_notes(self, query: str) -> List[NoteInfo]:
         with self.conn:
-            return self.conn.execute(
+            results = self.conn.execute(
                 """
-                SELECT filename, title
-                FROM notes
-                WHERE title LIKE ? OR content LIKE ?
-            """,
-                (f"%{query}%", f"%{query}%"),
+                SELECT DISTINCT n.filename, n.title
+                FROM notes n
+                LEFT JOIN links l ON n.filename = l.to_note
+                WHERE n.title LIKE ? OR n.content LIKE ? OR l.alias LIKE ?
+                """,
+                (f"%{query}%", f"%{query}%", f"%{query}%"),
             ).fetchall()
+        return [NoteInfo(filename, title) for filename, title in results]
 
     def delete_note(self, filename: str) -> None:
         with self.conn:
@@ -146,14 +172,6 @@ class Database:
                 (filename,),
             )
 
-    def get_broken_links(self) -> List[Tuple[str, str, str]]:
-        with self.conn:
-            return self.conn.execute("""
-                SELECT from_note, to_note, link_type
-                FROM links
-                WHERE is_broken = 1
-            """).fetchall()
-
     def update_broken_links(self) -> None:
         with self.conn:
             # Mark links as broken if their target note doesn't exist
@@ -170,24 +188,11 @@ class Database:
                 WHERE to_note IN (SELECT filename FROM notes)
             """)
 
+    def get_broken_links(self) -> List[BrokenLink]:
         with self.conn:
-            return self.conn.execute("SELECT filename, title FROM notes").fetchall()
-
-    def get_orphaned_notes(self) -> List[str]:
-        with self.conn:
-            return [
-                row[0]
-                for row in self.conn.execute("""
-                SELECT filename FROM notes
-                WHERE filename NOT IN (SELECT DISTINCT to_note FROM links)
+            results = self.conn.execute("""
+                SELECT from_note, to_note, alias
+                FROM links
+                WHERE is_broken = 1
             """).fetchall()
-            ]
-
-    def get_link_types(self) -> List[str]:
-        with self.conn:
-            return [
-                row[0]
-                for row in self.conn.execute("""
-                SELECT DISTINCT link_type FROM links
-            """).fetchall()
-            ]
+        return [BrokenLink(*result) for result in results]
