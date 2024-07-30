@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 from typing import Dict, List, Optional
 
-import yaml
+from .helpers import parse_frontmatter
 
 
 class Note:
@@ -25,7 +25,7 @@ class Note:
         Args:
             file_path (Path): The path to the note file.
         """
-        self.file_path: Path = Path(file_path)
+        self.file_path: Path = file_path
         self.filename: str = self.file_path.stem
         self.full_path: Path = file_path.absolute()
         self.metadata: Dict = {}
@@ -49,22 +49,8 @@ class Note:
     def _parse_note(self) -> None:
         """Parse the note file, extracting metadata, content, and links."""
         with open(self.file_path, "r", encoding="utf-8") as file:
-            content = file.read()
-
-        # Extract YAML frontmatter
-        if content.startswith("---"):
-            end = content.find("---", 3)
-            if end != -1:
-                try:
-                    self.metadata = yaml.safe_load(content[3:end]) or {}
-                except yaml.YAMLError:
-                    self.metadata = {}
-                self.content = content[end + 3 :].strip()
-            else:
-                self.content = content
-        else:
-            self.content = content
-
+            content = file.read().strip()
+        self.metadata, self.content = parse_frontmatter(content)
         self.links = self._extract_links()
 
     def _extract_links(self) -> List[Dict]:

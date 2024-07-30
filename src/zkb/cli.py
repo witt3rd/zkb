@@ -54,9 +54,9 @@ class CLI:
             print(f"Incoming links for {filename}:")
             for link in links:
                 if link.alias == filename:
-                    print(f"<- {link.target} | {link.source}")
+                    print(f"o: {link.source} {link.target} {link.alias}")
                 else:
-                    print(f"<<- {link.source} | {link.alias}")
+                    print(f"p: {link.source} {link.target} {link.alias}")
         else:
             print(f"No incoming links found for {filename}")
 
@@ -65,7 +65,7 @@ class CLI:
         if links:
             print(f"Outgoing links for {filename}:")
             for link in links:
-                print(f"-> {link.target} | {link.alias}")
+                print(f"s: {link.source} {link.target} {link.alias}")
         else:
             print(f"No outgoing links found for {filename}")
 

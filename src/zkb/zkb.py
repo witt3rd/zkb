@@ -38,14 +38,14 @@ class ZKB:
 
         self.db = Database(str(self.db_file_path))
 
-    def create_note(self, title: str, content: str) -> Note:
+    def create_note(self, filename: str, content: str) -> Note:
         """
         Create a new note.
 
         Parameters
         ----------
-        title : str
-            The title of the note (will be used as filename)
+        filename : str
+            The filename of the note to read (without extension)
         content : str
             The content of the note
 
@@ -59,16 +59,13 @@ class ZKB:
         FileExistsError
             If a note with the same filename already exists
         """
-        filename = self._sanitize_filename(title)
+        filename = self._sanitize_filename(filename)
         full_path = self.notes_path / f"{filename}.md"
         if full_path.exists():
             raise FileExistsError(f"Note {filename} already exists")
         with open(full_path, "w", encoding="utf-8") as f:
             f.write(content)
         note = Note(full_path)
-        if "title" not in note.metadata:
-            note.metadata["title"] = title
-            note.update_content(note.content, note.metadata)
         self._update_note_in_db(note)
         return note
 
@@ -91,6 +88,7 @@ class ZKB:
         FileNotFoundError
             If the note does not exist
         """
+        filename = ZKB._sanitize_filename(filename)
         full_path = self.notes_path / f"{filename}.md"
         if not full_path.exists():
             raise FileNotFoundError(f"Note {filename} does not exist")
@@ -120,7 +118,7 @@ class ZKB:
         full_path = self.notes_path / f"{filename}.md"
         if not full_path.exists():
             raise FileNotFoundError(f"Note {filename} does not exist")
-
+        full_path = ZKB._sanitize_path(full_path)
         note = Note(full_path)
         note.update_content(new_content)
         self._update_note_in_db(note)
@@ -140,6 +138,7 @@ class ZKB:
         FileNotFoundError
             If the note does not exist
         """
+        filename = ZKB._sanitize_filename(filename)
         full_path = self.notes_path / f"{filename}.md"
         if not full_path.exists():
             raise FileNotFoundError(f"Note {filename} does not exist")
@@ -170,13 +169,14 @@ class ZKB:
         Parameters
         ----------
         filename : str
-            The filename of the note to find incoming for
+            The filename of the note to find incoming for (without extension)
 
         Returns
         -------
         List[LinkInfo]
             A list of LinkInfo objects containing information about notes linking to the given note
         """
+        filename = ZKB._sanitize_filename(filename)
         return self.db.get_links(filename, direction="incoming")
 
     def get_outgoing_links(self, filename: str) -> List[LinkInfo]:
@@ -186,20 +186,22 @@ class ZKB:
         Parameters
         ----------
         filename : str
-            The filename of the note to find outgoing links for
+            The filename of the note to find outgoing links for (without extension)
 
         Returns
         -------
         List[LinkInfo]
             A list of LinkInfo objects containing information about notes linked from the given note
         """
+        filename = ZKB._sanitize_filename(filename)
         return self.db.get_links(filename, direction="outgoing")
 
     def scan_notes(self) -> int:
         """Scan all notes and update the database."""
         count = 0
-        for note_file in self.notes_path.rglob("*.md"):
-            note = Note(note_file)
+        for note_path in self.notes_path.rglob("*.md"):
+            sanitized_path = ZKB._sanitize_path(note_path)
+            note = Note(sanitized_path)
             self._update_note_in_db(note)
             count += 1
         self.db.update_broken_links()
@@ -240,9 +242,16 @@ class ZKB:
 
     def _update_note_in_db(self, note: Note) -> None:
         """Update note information in the database."""
-        self.db.add_or_update_note(note.filename, note.title, note.content)
+        self.db.add_or_update_note(note.filename, note.content)
         for link in note.links:
-            self.db.add_or_update_link(note.filename, link["target"], link["alias"])
+            alias = link["alias"] if link["alias"] else link["target"]
+            alias = ZKB._sanitize_filename(alias)
+            target = ZKB._sanitize_filename(link["target"])
+            self.db.add_or_update_link(
+                note.filename,
+                target,
+                alias,
+            )
 
     @staticmethod
     def _sanitize_filename(filename: str) -> str:
@@ -252,3 +261,9 @@ class ZKB:
             .rstrip()
             .replace(" ", "_")
         )
+
+    @staticmethod
+    def _sanitize_path(path: Path) -> Path:
+        """Sanitize the path to be used as a valid file path."""
+        filename = ZKB._sanitize_filename(path.stem)
+        return Path(*path.parent.parts, filename + path.suffix)

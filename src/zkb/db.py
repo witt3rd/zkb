@@ -6,13 +6,11 @@ from typing import List, Literal, Optional
 @dataclass
 class NoteInfo:
     filename: str
-    title: str
 
 
 @dataclass
 class NoteContent:
     filename: str
-    title: str
     content: str
 
 
@@ -50,7 +48,6 @@ class Database:
                 CREATE TABLE IF NOT EXISTS notes (
                     id INTEGER PRIMARY KEY,
                     filename TEXT UNIQUE,
-                    title TEXT,
                     content TEXT
                 )
             """)
@@ -68,17 +65,16 @@ class Database:
                 )
             """)
 
-    def add_or_update_note(self, filename: str, title: str, content: str) -> None:
+    def add_or_update_note(self, filename: str, content: str) -> None:
         with self.conn:
             self.conn.execute(
                 """
-                INSERT INTO notes (filename, title, content)
-                VALUES (?, ?, ?)
+                INSERT INTO notes (filename, content)
+                VALUES (?, ?)
                 ON CONFLICT(filename) DO UPDATE SET
-                    title = excluded.title,
                     content = excluded.content
             """,
-                (filename, title, content),
+                (filename, content),
             )
             # Update broken status of incoming links
             self.conn.execute(
@@ -90,6 +86,8 @@ class Database:
             )
 
     def add_or_update_link(self, from_note: str, to_note: str, alias: str) -> None:
+        """Add or update a link between two notes."""
+        print(f"Adding link: {from_note} -> {to_note} ({alias})")
         with self.conn:
             target_exists = (
                 self.conn.execute(
@@ -111,12 +109,12 @@ class Database:
     def get_all_notes(self) -> List[NoteInfo]:
         with self.conn:
             results = self.conn.execute("SELECT filename, title FROM notes").fetchall()
-        return [NoteInfo(filename, title) for filename, title in results]
+        return [NoteInfo(filename) for filename, title in results]
 
     def get_note(self, filename: str) -> Optional[NoteContent]:
         with self.conn:
             result = self.conn.execute(
-                "SELECT filename, title, content FROM notes WHERE filename = ?",
+                "SELECT filename, content FROM notes WHERE filename = ?",
                 (filename,),
             ).fetchone()
         return NoteContent(*result) if result else None
@@ -146,14 +144,14 @@ class Database:
         with self.conn:
             results = self.conn.execute(
                 """
-                SELECT DISTINCT n.filename, n.title
+                SELECT DISTINCT n.filename
                 FROM notes n
                 LEFT JOIN links l ON n.filename = l.to_note
-                WHERE n.title LIKE ? OR n.content LIKE ? OR l.alias LIKE ?
+                WHERE n.content LIKE ? OR l.alias LIKE ?
                 """,
-                (f"%{query}%", f"%{query}%", f"%{query}%"),
+                (f"%{query}%", f"%{query}%"),
             ).fetchall()
-        return [NoteInfo(filename, title) for filename, title in results]
+        return [NoteInfo(filename) for filename in results]
 
     def delete_note(self, filename: str) -> None:
         with self.conn:
@@ -196,3 +194,20 @@ class Database:
                 WHERE is_broken = 1
             """).fetchall()
         return [BrokenLink(*result) for result in results]
+
+    def get_orphaned_notes(self) -> List[str]:
+        with self.conn:
+            results = self.conn.execute("""
+                SELECT filename
+                FROM notes
+                WHERE filename NOT IN (
+                    SELECT DISTINCT to_note
+                    FROM links
+                )
+                AND filename NOT IN (
+                    SELECT DISTINCT alias
+                    FROM links
+                    WHERE alias IS NOT NULL
+                )
+            """).fetchall()
+        return [result[0] for result in results]
